@@ -1,0 +1,731 @@
+\PassOptionsToPackage{unicode=true}{hyperref} % options for packages loaded elsewhere
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provides euro and other symbols
+\else % if luatex or xelatex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage[]{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\usepackage{hyperref}
+\hypersetup{
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{longtable,booktabs}
+% Fix footnotes in tables (requires footnote package)
+\IfFileExists{footnote.sty}{\usepackage{footnote}\makesavenoteenv{longtable}}{}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+% set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+
+
+\date{}
+
+\begin{document}
+
+\hypertarget{pacman-network-specification}{%
+\section{Pacman Network
+Specification}\label{pacman-network-specification}}
+
+Author : Daiqi Wu
+
+Email : \url{daiqi.wu.17@ucl.ac.uk}
+
+Student Number : 17134402
+
+\hypertarget{contents}{%
+\subsection{Contents}\label{contents}}
+
+\begin{itemize}
+\tightlist
+\item
+  Terminology
+\item
+  General Description
+\item
+  Message Types
+\item
+  Message Contents and Encoding
+\item
+  Message Sanity Check
+\item
+  Message Timing
+\end{itemize}
+
+\hypertarget{terminology}{%
+\subsection{Terminology}\label{terminology}}
+
+This specification uses the terms MUST, SHOULD, and MAY as defined in
+RFC 2119 {[}rfc2119{]}.
+
+This specification also uses the terms LOCAL, AWAY, REMOTE and FOREIGN
+as defined in assigment PDF of ENGF0002.
+
+This protocol is generally a PEER-TO-PEER Network Model as definied in
+\emph{Distributed Application Architecture} {[}Sun Microsystem, 2011{]}.
+
+We also define addtional terms to specifiy the computer the software
+instance is running on :
+
+\begin{itemize}
+\item
+  LOCAL\_CLIENT : The LOCAL game instance that is running on localhost.
+\item
+  REMOTE\_CLIENT : The REMOTE instance that is connected to the LOCAL
+  game instance.
+\end{itemize}
+
+The Pacman protocol runs over TCP and UDP depending on message types,
+using port 27006.
+
+There are 12 types of messages :
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{maze\_update}
+\item
+  \texttt{pacman\_arrived}
+\item
+  \texttt{pacman\_left}
+\item
+  \texttt{pacman\_died}
+\item
+  \texttt{pacman\_go\_home}
+\item
+  \texttt{foreign\_pacman\_left}
+\item
+  \texttt{pacman\_ate\_ghost}
+\item
+  \texttt{pacman\_update}
+\item
+  \texttt{ghost\_update}
+\item
+  \texttt{eat}
+\item
+  \texttt{score\_update}
+\item
+  \texttt{status\_update}
+\end{itemize}
+
+\hypertarget{general-description}{%
+\subsection{General Description}\label{general-description}}
+
+At game start, \texttt{maze\_update} message is exchanged between
+LOCAL\_CLIENT and REMOTE\_CLIENT such that both clients keeps an update
+of each other's maze.
+
+When LOCAL pacman is in the LOCAL maze, LOCAL\_CLIENT sends \texttt{eat}
+messages to REMOTE\_CLIENT such that REMOTE\_CLIENT updates their REMOTE
+maze, and vice versa.
+
+When LOCAL pacman is AWAY, a \texttt{pacman\_arrived} message is sent to
+REMOTE\_CLIENT. Afterwards, \texttt{pacman\_update} will be sent to
+REMOTE\_CLIENT to display our AWAY pacman.
+
+Since CLIENTs always keep an updated copy of REMOTE maze, the eating
+done by LOCAL pacman is calculated by LOCAL\_CLIENT and updates
+REMOTE\_CLIENT via \texttt{eat} messages at all times.
+
+When LOCAL pacman is AWAY, \texttt{ghost\_update} message will be
+received from REMOTE\_CLIENT as it detects a FOREIGN pacman. Then,
+LOCAL\_CLIENT is responsilbe for calculating REMOTE ghosts and their
+interactions with our AWAY pacman.
+
+If a REMOTE ghost is eaten by AWAY pacman, \texttt{pacman\_ate\_ghost}
+is sent to update REMOTE\_CLIENT. If a AWAY pacman is eaten by a REMOTE
+ghost, LOCAL\_CLIENT will update REMOTE\_CLIENT with
+\texttt{pacman\_died}.
+
+When LOCAL pacman returns from REMOTE maze, LOCAL\_CLIENT will send a
+\texttt{pacman\_left} to inform REMOTE\_CLIENT of stop displaying the
+FOREIGN pacman.
+
+When a level fails (e.g.~one of the player runs out of lives) or the
+game progresses to the next level, REMOTE\_CLIENT sends a
+\texttt{pacman\_go\_home} message to LOCAL\_CLIENT to forcibly return
+their FOREIGN pacman. LOCAL\_CLIENT will confirm this leave by replying
+a \texttt{foreign\_pacman\_left.}
+
+When the score of the LOCAL pacman changes, LOCAL\_CLIENT shall update
+the REMOTE\_CLIENT by sending a \texttt{score\_update} message.
+
+In the following scenario when :
+
+\begin{itemize}
+\tightlist
+\item
+  players fail a level,
+\item
+  game progresses to a next level,
+\item
+  game gets initialised,
+\item
+  the state of ghosts change,
+\end{itemize}
+
+a \texttt{status\_update} message will be sent from the LOCAL\_CLIENT to
+inform the REMOTE\_CLIENT of its gamestate and vice versa.
+
+\hypertarget{message-types}{%
+\subsection{Message Types}\label{message-types}}
+
+Among the above 12 types of messages,
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{maze\_update},
+\item
+  \texttt{status\_update},
+\item
+  \texttt{pacman\_arrived},
+\item
+  \texttt{pacman\_left},
+\item
+  \texttt{pacman\_died},
+\item
+  \texttt{pacman\_go\_home},
+\item
+  \texttt{foreign\_pacman\_left},
+\item
+  \texttt{pacman\_ate\_ghost}
+\end{itemize}
+
+are sent using TCP while
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{pacman\_update},
+\item
+  \texttt{ghost\_update},
+\item
+  \texttt{eat},
+\item
+  \texttt{score\_update}
+\end{itemize}
+
+are sent using UDP.
+
+The reason for this is that \texttt{maze\_update} is called less common
+and sends large amount of data at once. Other game state messages sent
+through TCP are generally less commonily called every round.
+
+The messages sent using UDP are usually update messages which requires a
+more timely delivery of information. Since game state updates every 20
+ms, it is acceptable to lose few packages since newer packages will make
+up the loss.
+
+\hypertarget{message-contents-and-encoding}{%
+\subsection{Message Contents and
+Encoding}\label{message-contents-and-encoding}}
+
+\hypertarget{messages-transmitted-using-tcp}{%
+\subsubsection{Messages transmitted using
+TCP}\label{messages-transmitted-using-tcp}}
+
+\hypertarget{maze_update}{%
+\paragraph{\texorpdfstring{\texttt{maze\_update}}{maze\_update}}\label{maze_update}}
+
+\texttt{maze\_update} message consists of a 166 byte package as follows
+:
+
+\begin{longtable}[]{@{}lllll@{}}
+\toprule
+0 - 3 & 4 - 1253 & 1254 - 1303 & 1304 - 1323 & 1324 -
+1327\tabularnewline
+\midrule
+\endhead
+M\_TYPE & MAZE\_MATRIX & PILL\_LOC & END\_LOC & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{maze\_update} has decimal value 0.
+\item
+  MAZE\_MATRIX : a 1250 bit field that consists of a 25 * 25 matrix with
+  2 bits per element. Each element have a decimal value of 0, 1, 2 which
+  indicates wall, road with food and road without food.
+\item
+  PILL\_LOC : a 50 bit field that consists of 5 pairs of coordinates X
+  Y. The coordinate value X Y are both 5 bit unsigned integer describing
+  the location of power pills.
+\item
+  END\_LOC : a 20 bit field that consists of 2 pairs of coordinates X Y
+  with same data type as PILL\_LOC that desribes the end point of the
+  tunnel A and B.
+\item
+  UNUSED : a 4 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{status_update}{%
+\paragraph{\texorpdfstring{\texttt{status\_update}}{status\_update}}\label{status_update}}
+
+\texttt{status\_update} message consists of a 1 byte package as follows
+:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+0 - 3 & 4 - 6 & 7\tabularnewline
+\midrule
+\endhead
+M\_TYPE & G\_STATUS & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{status\_update} has decimal value 1.
+\item
+  G\_STATUS : a 3 bit unsigned integer that specifies the updating
+  gamestate.
+\end{itemize}
+
+\begin{quote}
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Decimal Value & Gamestate\tabularnewline
+\midrule
+\endhead
+0 & STARTUP\tabularnewline
+1 & CHASE\tabularnewline
+2 & FRIGHTEN\tabularnewline
+3 & GAME\_OVER\tabularnewline
+4 & NEXT\_LEVEL\_WAIT\tabularnewline
+5 & READY\_TO\_RESTART\tabularnewline
+6 & ILLEGAL\tabularnewline
+7 & ILLEGAL\tabularnewline
+\bottomrule
+\end{longtable}
+
+Note : If received G\_STATUS of 6 or 7, CLIENT should send
+\texttt{status\_update} with G\_STATUS of 0 to reinitialise the game.
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  UNUSED : a 1 bit field used for bit alignment
+\end{itemize}
+
+\hypertarget{pacman_arrived}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_arrived}}{pacman\_arrived}}\label{pacman_arrived}}
+
+\texttt{pacman\_arrived} message consists a byte package as follows :
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+0 - 3 & 4 - 7\tabularnewline
+\midrule
+\endhead
+M\_TYPE & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_arrived} has decimal value 2.
+\item
+  UNUSED : a 4 bit field used for bit alignment
+\end{itemize}
+
+\hypertarget{pacman_left}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_left}}{pacman\_left}}\label{pacman_left}}
+
+\texttt{pacman\_left} message consists of a byte package as follows :
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+0 - 3 & 4 - 7\tabularnewline
+\midrule
+\endhead
+M\_TYPE & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_left} has decimal value 3.
+\item
+  UNUSED : a 4 bit field used for bit alignment
+\end{itemize}
+
+\hypertarget{pacman_died}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_died}}{pacman\_died}}\label{pacman_died}}
+
+\texttt{pacman\_died} message consists of a 4 byte package as follows :
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+0 - 3 & 4 - 13 & 14 - 15\tabularnewline
+\midrule
+\endhead
+M\_TYPE & DIE\_LOC & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_died} has decimal value 4.
+\item
+  DIE\_LOC : a pair of coordinate X Y with two unsigned 5 bit integer to
+  describe the death location of the AWAY pacman on the REMOTE maze.
+\item
+  UNUSED : a 2 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{pacman_go_home}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_go\_home}}{pacman\_go\_home}}\label{pacman_go_home}}
+
+\texttt{pacman\_go\_home} message consists of a byte package as follows
+:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+0 - 3 & 4 - 7\tabularnewline
+\midrule
+\endhead
+M\_TYPE & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_go\_home} has decimal value 5.
+\item
+  UNUSED : a 4 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{foreign_pacman_left}{%
+\paragraph{\texorpdfstring{\texttt{foreign\_pacman\_left}}{foreign\_pacman\_left}}\label{foreign_pacman_left}}
+
+\texttt{foreign\_pacman\_left} message consists of a byte package as
+follows :
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+0 - 3 & 4 - 7\tabularnewline
+\midrule
+\endhead
+M\_TYPE & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{foreign\_pacman\_left} has decimal value 6.
+\item
+  UNUSED : a 4 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{pacman_ate_ghost}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_ate\_ghost}}{pacman\_ate\_ghost}}\label{pacman_ate_ghost}}
+
+\texttt{pacman\_ate\_ghost} message consists of a byte package as
+follows :
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+0 - 3 & 4 - 13 & 14 - 15\tabularnewline
+\midrule
+\endhead
+M\_TYPE & EAT\_LOC & G\_NUM\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_ate\_ghost} has decimal value 7.
+\item
+  EAT\_LOC : a pair of coordinate X Y with two unsigned 5 bit integer to
+  describe the ghost eating location of the AWAY pacman on the REMOTE
+  maze.
+\item
+  G\_NUM : a unsigned 2 bit integer to describe the color of the ghost
+  that is being eaten by the AWAY pacman on the REMOTE maze.
+\end{itemize}
+
+\begin{quote}
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Decimal Value & Eaten Ghost Color\tabularnewline
+\midrule
+\endhead
+0 & RED\tabularnewline
+1 & BLUE\tabularnewline
+2 & YELLOW\tabularnewline
+3 & PINK\tabularnewline
+\bottomrule
+\end{longtable}
+\end{quote}
+
+\hypertarget{message-transmitted-using-udp}{%
+\subsubsection{Message Transmitted using
+UDP}\label{message-transmitted-using-udp}}
+
+\hypertarget{pacman_update}{%
+\paragraph{\texorpdfstring{\texttt{pacman\_update}}{pacman\_update}}\label{pacman_update}}
+
+\texttt{pacman\_update} message consists of a 5 byte package as follows
+:
+
+\begin{longtable}[]{@{}llllll@{}}
+\toprule
+0 - 3 & 4 - 19 & 20 - 29 & 30 - 31 & 32 - 33 & 34 - 39\tabularnewline
+\midrule
+\endhead
+M\_TYPE & SEQ & P\_LOC & P\_DIR & P\_SPD & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{pacman\_update} has decimal value 8.
+\item
+  SEQ : a 16 bit unsigned integer that increases by one for every new
+  UDP message sent. If it reaches 65535, it wraps back round to 0.
+\item
+  P\_LOC : a pair of coordinate X Y with two 5 bit unsigned integer to
+  describe the location of the AWAY pacman.
+\item
+  P\_DIR : a 2 bit unsigned integer to describe the direction AWAY
+  pacman currently faces.
+\end{itemize}
+
+\begin{quote}
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Decimal Value & Pacman Direction\tabularnewline
+\midrule
+\endhead
+0 & UP\tabularnewline
+1 & LEFT\tabularnewline
+2 & DOWN\tabularnewline
+3 & RIGHT\tabularnewline
+\bottomrule
+\end{longtable}
+\end{quote}
+
+\begin{itemize}
+\item
+  P\_SPD : a 2 bit unsigned integer to describe the speed of the AWAY
+  pacman.
+\item
+  UNUSED : a 4 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{ghost_update}{%
+\paragraph{\texorpdfstring{\texttt{ghost\_update}}{ghost\_update}}\label{ghost_update}}
+
+\texttt{ghost\_update} message consists of a 10 byte package as follows
+:
+
+\begin{longtable}[]{@{}llllll@{}}
+\toprule
+0 - 3 & 4 - 19 & 20 - 21 & 22 & 23 - 78 & 79\tabularnewline
+\midrule
+\endhead
+M\_TYPE & SEQ & G\_ALIVE & G\_MODE & G\_INFO (G\_LOC, G\_DIR, G\_SPD) &
+UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{ghost\_update} has decimal value 9.
+\item
+  SEQ : a 16 bit unsigned integer that increases by one for every new
+  UDP message sent. If it reaches 65535, it wraps back round to 0.
+\item
+  G\_ALIVE : a 2 bit unsigned integer that indicates the number of
+  ghosts alive in frightened mode (dead ghosts will return to base and
+  revive).
+\end{itemize}
+
+\begin{quote}
+Note : If received G\_ALIVE equals or more than 4, CLIENT should send
+\texttt{status\_update} with G\_STATUS of 3 to terminate the game and
+check for errors.
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  G\_MODE : a 1 bit boolean value that indicates whether in frightened
+  mode or chase mode.
+\end{itemize}
+
+\begin{quote}
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Boolean Value & Status\tabularnewline
+\midrule
+\endhead
+TRUE & FRIGHTEN\tabularnewline
+FALSE & CHASE\tabularnewline
+\bottomrule
+\end{longtable}
+\end{quote}
+
+\begin{itemize}
+\item
+  G\_INFO : a 56 bit field which contains 4 tuples of a pair of X Y
+  coordinates with two 5 bit unsigned integers indicating the location
+  of a ghost, a 2 bit unsigned integer indicating the direction of the
+  ghost and a 2 bit unsigned integer indicating the speed of the ghost.
+  The corresponding tuple of each ghost is ordered in the same way as it
+  is in \texttt{pacman\_ate\_ghost}. The G\_LOC is orderd in the same
+  way as \texttt{pacman\_update}.
+\item
+  UNUSED : a 1 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{eat}{%
+\paragraph{\texorpdfstring{\texttt{eat}}{eat}}\label{eat}}
+
+\texttt{eat} message consists of a 4 byte package as follows :
+
+\begin{longtable}[]{@{}lllll@{}}
+\toprule
+0 - 3 & 4 - 19 & 20 - 29 & 30 & 31\tabularnewline
+\midrule
+\endhead
+M\_TYPE & SEQ & F\_LOC & F\_FOREIGN & F\_POWER\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{eat} has demcimal value 10.
+\item
+  SEQ : a 16 bit unsigned integer that increases by one for every new
+  UDP message sent. If it reaches 65535, it wraps back round to 0.
+\item
+  F\_LOC : a pair of coordinate X Y with two 5 bit unsigned integers
+  indicating the location of eaten food.
+\item
+  F\_FOREIGN : a 1 bit boolean value that indicates whether our LOCAL
+  pacman is eating food on a REMOTE maze.
+\end{itemize}
+
+\begin{quote}
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Boolean Value & Status\tabularnewline
+\midrule
+\endhead
+TRUE & REMOTE\tabularnewline
+FALSE & LOCAL\tabularnewline
+\bottomrule
+\end{longtable}
+\end{quote}
+
+\begin{itemize}
+\tightlist
+\item
+  F\_POWER : a 1 bit boolean value that indicates whether the food ate
+  was a powerpill.
+\end{itemize}
+
+\hypertarget{score_update}{%
+\paragraph{\texorpdfstring{\texttt{score\_update}}{score\_update}}\label{score_update}}
+
+\texttt{score\_update} message consists of a 7 byte package as follows :
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule
+0 - 3 & 4 - 19 & 20 - 51 & 52 - 55\tabularnewline
+\midrule
+\endhead
+M\_TYPE & SEQ & SCORE\_INFO & UNUSED\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{itemize}
+\item
+  M\_TYPE : a 4 bit type field that specifies message types.
+  \texttt{score\_update} has decimal value 11.
+\item
+  SEQ : a 16 bit unsigned integer that increases by one for every new
+  UDP message sent. If it reaches 65535, it wraps back round to 0.
+\item
+  SCORE\_INFO : a 32 bit unsigned integer that indicates the score of
+  the LOCAL pacman.
+\item
+  UNUSED : a 4 bit field used for bit alignment.
+\end{itemize}
+
+\hypertarget{message-sanity-check}{%
+\subsection{Message Sanity Check}\label{message-sanity-check}}
+
+For all locations (P\_LOC, G\_LOC, EAT\_LOC, DIE\_LOC .. ) in messages,
+if any of the X Y coordinate is out of range {[}0 .. 24{]}, CLIENT
+SHOULD terminate the game by sending a \texttt{status\_update} with
+G\_STATUS of 3 to terminate the game.
+
+For all messages, M\_TYPE MUST fall in range {[}0 .. 11{]}, otherwise
+messages will be regarded illegal and discarded.
+
+All UNUSED fields in messages MAY be filled with any value as the CLIENT
+wishes.
+
+\hypertarget{message-timing}{%
+\subsection{Message Timing}\label{message-timing}}
+
+For all messages using TCP and \texttt{eat}, the message is sent
+whenever necessary.
+
+For all messages using UDP except for \texttt{eat}, update messages are
+sent at a time interval of 20ms when frame rate is higher than 50 per
+second. Otherwise, update messages will be sent every frame.
+
+\end{document}
