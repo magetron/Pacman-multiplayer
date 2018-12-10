@@ -126,7 +126,7 @@ The messages sent using UDP are usually update messages which requires a more ti
 
 #### `status_update`
 
-`status_update` message consists of a 1 byte package as follows :
+`status_update` message consists of a byte package as follows :
 
 | 0 - 3  | 4 - 6    | 7      |
 |--------|----------|--------|
@@ -177,7 +177,7 @@ The messages sent using UDP are usually update messages which requires a more ti
 
 #### `pacman_died`
 
-`pacman_died` message consists of a 4 byte package as follows :
+`pacman_died` message consists of a 2 byte package as follows :
 
 | 0 - 3  | 4 - 13  | 14 - 15 |
 |--------|---------|---------|
@@ -215,7 +215,7 @@ The messages sent using UDP are usually update messages which requires a more ti
 
 #### `pacman_ate_ghost`
 
-`pacman_ate_ghost` message consists of a byte package as follows :
+`pacman_ate_ghost` message consists of a 2 byte package as follows :
 
 | 0 - 3  | 4 - 13  | 14 - 15 |
 |--------|---------|---------|
@@ -288,7 +288,6 @@ The messages sent using UDP are usually update messages which requires a more ti
 > | FALSE         | CHASE    |
 
 * G_INFO : a 56 bit field which contains 4 tuples of a pair of X Y coordinates with two 5 bit unsigned integers indicating the location of a ghost, a 2 bit unsigned integer indicating the direction of the ghost and a 2 bit unsigned integer indicating the speed of the ghost. The corresponding tuple of each ghost is ordered in the same way as it is in `pacman_ate_ghost`. The G_LOC is orderd in the same way as `pacman_update`.
-
 
 * UNUSED : a 1 bit field used for bit alignment.
 
