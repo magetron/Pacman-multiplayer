@@ -1,0 +1,392 @@
+ 
+
+
+
+ENGF0002 ASSIGNMENT 5                                   Author: 18012035
+Expires: March 10, 2019                                December 10, 2018
+
+
+             <PACMAN Network Communication Specification> 
+
+
+Table of Contents
+
+   1.  Terminology  . . . . . . . . . . . . . . . . . . . . . . . . .  2
+   2.  Maze simulation  . . . . . . . . . . . . . . . . . . . . . . .  2
+   3.  Message Timing . . . . . . . . . . . . . . . . . . . . . . . .  2
+   4.  Message Contents . . . . . . . . . . . . . . . . . . . . . . .  3
+   5.  Message encoding . . . . . . . . . . . . . . . . . . . . . . .  5
+     5.1  MAZE message format . . . . . . . . . . . . . . . . . . . .  5
+     5.2  PACMAN_ZONE message format  . . . . . . . . . . . . . . . .  5
+     5.3  GAMESTATE message format  . . . . . . . . . . . . . . . . .  6
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 1]
+
+                                                                        
+
+
+1.  Terminology
+
+   This specification uses the terms MUST, SHOULD, and MAY as defined in
+   RFC 2119 [rfc2119]
+
+   This Pacman protocol runs over TCP using port 722 ("PAC" on a phone
+   keypad). One game listens as a server, one game connects as a client. 
+   There are 3 message types: MAZE, PACMAN_ZONE and GAMESTATE
+
+   All integers in messages are encoded in big endian order. 
+
+   Bools in this specification are such that 0 == False, 1 == True. 
+
+
+   The MAZE message is sent by both players right after connection has
+   been established. It contains the maze layout of the local game.
+   Sending the maze to the other player lets both sides know the maze
+   layout of the other player.
+
+   Whenever a Pacman crosses either tunnels, PACMAN_ZONE is sent. This
+   lets the game know wether or not there is a foreign Pacman on the
+   screen, and what actions to take (register view, unregister, scatter
+   ghosts, etc)
+
+   GAMESTATE is continually sent. The remote game uses this information
+   to update every element of the game: Pacman information, ghost
+   information, score and game status.
+
+
+2.  Maze simulation
+
+   In this specification, we assume that both clients run and simulate
+   both its local maze AND the remote maze. The information carried by
+   the three messages is enough to keep both clients' mazes perfectly
+   identical at all times.
+
+3.  Message Timing
+
+   MAZE and PACMAN_ZONE are event-triggered: MAZE after connection is
+   established and PACMAN_ZONE when Pacman crosses either tunnels OR
+   when one maze gets finished.
+
+   On the other hand, GAMESTATE messages are sent every frame of the
+   local computer: there is little to no advantage to update the remote
+   game about the gamestate faster than the local one can display it,
+   and there might be negative side-effects when updating less often
+   than the local framerate (sync and delay issues for example).
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 2]
+
+                                                                        
+
+
+4.  Message Contents
+
+   MAZE message:
+      - Type: MAZE (00)
+      - Length: Length of the payload in bits
+      - Payload: Binary stream of a text file encoded in ASCII
+                 read in binary mode
+
+   PACMAN_ZONE message:
+      - Type: PACMAN_ZONE (01)
+      - Payload: A list of True|False that each represent...
+         - FOREIGN Pacman is arriving on the screen
+         - FOREIGN Pacman is leaving the screen
+         - FOREIGN Pacman died on the screen
+         - Call AWAY Pacman back home from REMOTE 
+
+   GAMESTATE message:
+      - Type: GAMESTATE (10)
+      - Payload: 
+         - Our Pacman (both when LOCAL or AWAY) current pos (x,y)
+         - Our Pacman's direction
+         - Our Pacman's speed
+         - Eaten stuff position (x,y)
+         - Eaten stuff isForeign (True|False)
+         - Eaten stuff isPowerpill (True|False)
+         - List of ghosts info (4 elements) with each element being:
+            - Ghost number
+            - Ghost position (x,y)
+            - Ghost direction
+            - Ghost speed
+            - Ghost mode
+         - List of length 4 of eaten ghosts numbers
+         - Score
+         - Status update
+
+            Pacman/ghost direction can be 4 types:
+            +------------------+----+
+            | DIRECTION        | ID |
+            #==================#====#
+            | UP               | 00 |
+            +------------------+----+
+            | RIGHT            | 01 |
+            +------------------+----+
+            | DOWN             | 10 |
+            +------------------+----+
+            | LEFT             | 11 |
+            +------------------+----+
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 3]
+
+                                                                        
+
+
+            Ghost mode can be 4 types:
+            +------------------+----+
+            | MODE             | ID |
+            #==================#====#
+            | CHASE            | 00 |
+            +------------------+----+
+            | FRIGHTEN         | 01 |
+            +------------------+----+
+            | FRIGHTEN_TRAPPED | 10 |
+            +------------------+----+
+            | EYES             | 11 |
+            +------------------+----+
+
+            Status updates can be 3 types:
+            +------------------+----+
+            | STATUS           | ID |
+            #==================#====#
+            | NEXT_LEVEL_WAIT  | 00 |
+            +------------------+----+
+            | GAME_OVER        | 01 |
+            +------------------+----+
+            | READY_TO_RESTART | 10 |
+            +------------------+----+
+
+
+   We are sending our local Pacman's position constantly even though our
+   Pacman is not AWAY in order to keep the remote updated about the
+   state of local maze. This allows to not send the state of the local
+   maze when the remote Pacman comes to our local maze. The remote has
+   to decide what to do with the coordinates depending what the last
+   PACMAN_ZONE was sent. Before the first PACMAN_ZONE message, we'll
+   assume that the remote Pacman is in the remote maze.
+
+   The Pacman position is sent as two integers. We take the floating
+   point value of the position of the Pacman, multiply it by 10 000 and
+   round it so we can represent the floating point number as an integer.
+   On the receiving side, we take that integer and divide it by 10 000
+   again to get a floating point number with 5 digits of precision,
+   which is more than enough for our needs.
+
+   We do the same with the Ghost's x,y coordinate.
+
+
+   We have a list of 4 "eaten" ghosts, just in case we somehow eat two
+   ghosts within the same frame so that we don't miss any eaten ghosts.
+
+
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 4]
+
+                                                                        
+
+
+5.  Message encoding
+
+5.1  MAZE message format
+
+   The MAZE message is a message of variable length. 
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | T |                           L                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Maze binary stream . . . . .
+   +-+-+-+-+-+-+-+-+-+-+--- -    -          .
+
+   Fields: 
+      - T: type field. MUST be 00 for MAZE message
+      - L: Length of the maze payload in bits. The maze stream can be
+           of 	arbitrary length, thus the need for the Length field
+
+      - Maze binary stream: the maze text file in binary
+
+
+
+
+
+
+
+
+5.2  PACMAN_ZONE message format
+
+   PACMAN_ZONE is a fixed-length 6-bit long binary-encoded message
+   containing 4 boolean values.
+
+     0   1   2   3   4   5 
+   +---+---+---+---+---+---+
+   |   T   | A | L | D | H |
+   +---+---+---+---+---+---+
+   Fields:
+      - T: Type. MUST be 01 for PACMAN_ZONE
+      - A: (Bool) Local Pacman is arriving at remote
+      - L: (Bool) Local Pacman just left remote
+      - D: (Bool) Local Pacman died at remote
+      - H: (Bool) Remote Pacman is calling their Pacman home
+
+
+
+
+
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 5]
+
+                                                                        
+
+
+5.3  GAMESTATE message format
+
+   GAMESTATE is a fixed-length 72 bytes binary-encoded message
+
+     |0              |    1          |        2      |            3  |
+     |0 1 2 3 4 5 6 7|8 9 0 1 2 3 4 5|6 7 8 9 0 1 2 3|4 5 6 7 8 9 0 1|
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    0| T |PMD|PMS|           Pacman X position                       |
+     +-+-+-+-+-+-+-+-+-+-+-+--+--+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    4|XPos(contd)|           Pacman Y position                       |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    8|YPos(contd)|  EAT  |  EAT  |  EAT  |  EAT  |x x x x x x|StU|F|P|
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   12|                 Pacman ate stuff X position                   |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   16|                 Pacman ate stuff Y position                   |
+   +++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+++
+   20|GhN|GhD|GhM|x x|                 Ghost speed                   |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   24|                     Ghost X position                          | 	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   28|                     Ghost Y position                          |	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   32|GhN|GhD|GhM|x x|                 Ghost speed                   |	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   36|                     Ghost X position                          | 	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   40|                     Ghost Y position                          |	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   44|GhN|GhD|GhM|x x|                 Ghost speed                   |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   48|                     Ghost X position                          | 	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   52|                     Ghost Y position                          |	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	
+   56|GhN|GhD|GhM|x x|                 Ghost speed                   |	
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   60|                     Ghost X position                          |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   64|                     GHOST Y POSITION                          |
+   +++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+++
+   68|                          SCORE                                |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+
+
+
+ 
+
+
+<18012035>               Expires March 10, 2019                 [Page 6]
+
+                                                                        
+
+
+   Bytes 20 to 68 is really 4x the same message format, with different
+   values in them.
+
+   Fields:
+      - x: Padding bits
+      - PMD: Pacman Direction
+      - PMS: Pacman Speed
+
+      - F: (Bool) Pacman ate a Foreign pill
+      - P: (Bool) Pacman ate a Powerpill
+
+      - EAT: 4 slots, and for each slot:
+         -If first 2bits == 00, 2 last bits is number of the eaten ghost
+         -If first 2bits == 11, no ghost is eaten (for this slot)
+      - StU: Status update - sends the status of the local Maze
+      - GhN: Ghost number
+      - GhD: Ghost direction
+      - GhM: Ghost mode
+
+      - Score: sends the score of the local player to remote
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Structure of this document was inspired by the Pong specification
+examples in the Pacman repository
+
+
+
+
+
+<18012035>               Expires March 10, 2019                 [Page 7]

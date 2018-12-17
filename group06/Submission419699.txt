@@ -1,0 +1,479 @@
+Student name: Alexandru-Vlad Niculae
+Student number: 18009415
+
+PACMAN Protocol Specification
+=============================
+
+The pacman protocol runs over both TCP (using port 5432) and UDP (using port 7717).
+Each message is sent using either TCP or UDP.
+
+Our pacman is always modelled on our computer, even when it is visiting the remote screen. 
+The display of our pacman on the remote screen may lag slightly if the network is not performing well.
+
+We use the following terminology to distinguish between visiting pacman and various game objects:
+  - LOCAL: the game object is a local game object, and is currently on the local screen.
+  - AWAY: our pacman is currently away on the remote screen.
+  - REMOTE: a game object on the remote screen that our AWAY pacman might interact with.
+  - FOREIGN: the other player’s pacman, when it is visiting our screen.
+In this document, when these terms are capitalized, they have these specific meanings.
+
+
+The complete list of messages in the current version of the protocol:
+  - MAZE
+  - PACMAN_ARRIVED
+  - PACMAN_LEFT
+  - PACMAN_DIED
+  - PACMAN_HOME
+  - PACMAN_UPDATE
+  - GHOST_UPDATE
+  - GHOST_EATEN
+  - EAT_UPDATE
+  - SCORE_UPDATE
+  - STATUS_UPDATE
+Their terminology, contents and formats are as follows below.
+
+MAZE
+====
+Runs over TCP.
+
+The maze is sent at game start by each computer. 
+The maze that is sent includes the location of all food and powerpills.
+
+For sending a maze, there should be one message for every element in the maze.
+e.g. If the maze is a matrix of 31x28, there will be 31*28=868 messages of type MAZE.
+ 
+CONTENTS
+--------
+  - TYPE: MAZE
+  - ROW: The row index of the current element.
+         An integer in the range [0,30].
+  - COL: The column index of the current element.
+         An integer in the range [0,27].
+  - VAL: The type of the current element.
+         An integer in the range [0,5],
+         where 0 - nothing, 1 - wall, 2 - food, 3 - powerpill, 4 - the first tunnel, 
+	 5 - the second tunnel.
+
+FORMAT
+------
+MAZE messages consist of three byte, encoded as follows.
+  
+    0                   1                   2                  
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3  
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | TYPE  |   ROW   |   COL   | VAL |      X      |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0000.
+    - ROW: 5 bit unsigned integer in big-endian byte order.
+    - COL: 5 bit unsigned integer in big-endian byte order.
+    - VAL: 3 bit unsigned integer in big-endian byte order.
+    - X: 7 bits, not used. MUST be set to zero in this version of the protocol.
+ 
+
+PACMAN_ARRIVED
+==============
+Runs over TCP.
+
+This message is sent only when the pacman becomes AWAY. 
+The remote computer can initialise any state.
+
+CONTENTS
+--------
+  - TYPE: PACMAN_ARRIVED
+
+FORMAT
+------
+PACMAN_ARRIVED messages consist of one byte, encoded as follows:
+
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  |   X   |                
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0001.
+    - X: 4 bits, not used. MUST be set to zero in this version of the protocol.
+
+PACMAN_LEFT
+===========
+Runs over TCP.
+
+This message is sent when our AWAY pacman has traversed the tunnel again, and is now LOCAL.
+The remote side will stop displaying the pacman.
+This message can also be sent when our AWAY pacman is forcibly sent home. (see PACMAN_HOME)
+
+CONTENTS
+--------
+  - TYPE: PACMAN_LEFT
+
+FORMAT
+------
+  PACMAN_LEFT messages consist of one byte, encoded as follows:
+ 
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  |   X   |                
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0010.
+    - X: 4 bits, not used. MUST be set to zero in this version of the protocol.
+
+PACMAN_DIED
+===========
+Runs over TCP.
+
+This message is sent when our AWAY pacman was killed by a REMOTE ghost.
+
+CONTENTS
+--------
+  - TYPE: PACMAN_DIED
+
+FORMAT
+------
+  PACMAN_DIED messages consist of one byte, encoded as follows:
+
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  |   X   |                
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0011.
+    - X: 4 bits, not used. MUST be set to zero in this version of the protocol.
+
+PACMAN_HOME
+===========
+Runs over TCP.
+
+This message is sent when the level is completed on the remote screen.
+Pacman is forcibly sent home.
+
+CONTENTS
+--------
+  - TYPE: PACMAN_HOME
+
+FORMAT
+------
+  PACMAN_HOME messages consist of one byte, encoded as follows:
+
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  |   X   |                
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0100.
+    - X: 4 bits, not used. MUST be set to zero in this version of the protocol.
+
+PACMAN_UPDATE 
+=============
+Runs over UDP.
+
+This message is sent continuously to the remote computer while the pacman is AWAY, 
+giving the current position, direction and speed of our pacman.
+
+CONTENTS
+--------
+  - TYPE: PACMAN_UPDATE
+  - POSX: Position of pacman along the Ox axis.
+	  A real number in the range [0, 650] with a precision of exactly 2 decimal places,
+          where 0.0 is the left margin and 650.0 is the right margin.
+  - POSY: Position of pacman along the Oy axis.
+	  A real number in the range [0, 800] with a precision of exactly 2 decimal places,
+          where 0.0 is the upper margin and 800.0 is the lower margin.
+  - DIR: The direction of pacman.
+	 An integer in the range [0,4],
+         where 0 - UP, 1 - LEFT, 2 - RIGHT, 3 - DOWN, 4 - NONE.
+  - SPEED: The speed of pacman.
+           A real number in the range [0, 1] with a precision of exactly 2 decimal places.
+  - NUM: Integer that is incremented by one for every new message sent.
+         If it reaches (2^31)-1, it wraps back round to zero.
+
+FORMAT
+------
+
+  PACMAN_UPDATE messages consist of eleven bytes, encoded as follows:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | TYPE  |      POSX_L       |   POSX_R    |      POSY_L       |Y|  
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  POSY_R     | DIR |S|   SPEED_R   |     X     |      NUM      |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                NUM (cont.)                    |                
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0101.
+
+    - POSX_L: 10 bit unsigned integer in big-endian byte order,
+              representing the value of POSX to the left of the decimal point. 
+              i.e. if POSX = 157.8, then POSX_L = 157.
+    - POSX_R: 7 bit unsigned integer in big-endian byte order,
+              representing the value of POSX to the right of the decimal point. 
+              i.e. if POSX = 157.80, then POSX_R = 80 (not 8)
+	           Note: POSX has a precision of exactly 2 decimals.
+
+    - POSY_L: 10 bit unsigned integer in big-endian byte order,
+              representing the value of POSY to the left of the decimal point.
+    - POSY_R: 7 bit unsigned integer in big-endian byte order,
+              representing the value of POSY to the right of the decimal point. 
+
+    - DIR: 3 bit unsigned integer in big-endian byte order.
+
+    - S: 1 bit unsigned integer in big-endian byte order,
+         representing the value of SPEED to the left of the decimal point.
+    - SPEED_R: 7 bit unsigned integer in big-endian byte order,
+               representing the value of SPEED to the right of the decimal point. 
+
+    - Y: 1 bit, not used. MUST be set to zero in this version of the protocol.
+    - X: 6 bits, not used. MUST be set to zero in this version of the protocol.
+   
+    - NUM: 32 bit unsigned integer in big-endian byte order.
+
+    
+
+GHOST_UPDATE
+============
+Runs over UDP.
+
+This message is sent continuously by the remote computer while our pacman is AWAY.
+Gives the position, direction, speed and mode of each ghost.
+Amongst other things, mode includes whether the ghost is in “FRIGHTEN” mode 
+(having turned blue, and being edible). 
+The local computer should use this to determine if our pacman was either killed by one,
+or has eaten one.
+
+CONTENTS
+--------
+  - TYPE: GHOST_UPDATE
+  - POSX: Position of ghost along the Ox axis.
+	  A real number in the range [0, 650] with a precision of exactly 2 decimal places,
+          where 0.0 is the left margin and 650.0 is the right margin.
+  - POSY: Position of ghost along the Oy axis.
+	  A real number in the range [0, 800] with a precision of exactly 2 decimal places,
+          where 0.0 is the upper margin and 800.0 is the lower margin.
+  - DIR: The direction of ghost.
+	 An integer in the range [0,4],
+         where 0 - UP, 1 - LEFT, 2 - RIGHT, 3 - DOWN, 4 - NONE.
+  - SPEED: The speed of ghost.
+           A real number in the range [0, 1] with a precision of exactly 2 decimal places.
+  - MODE: The mode of ghost.
+	  An integer in the range [0,5],
+          where 0 - SCATTER, 1 - CHASE, 2 - FRIGHTEN, 3 - FRIGHTEN_TRAPPED, 4 - EYES, 
+          5 - REMOTE.
+  - NUM: Integer that is incremented by one for every new message sent.
+         If it reaches (2^31)-1, it wraps back round to zero.
+
+
+FORMAT
+------
+  GHOST_UPDATE messages consist of eleven bytes, encoded as follows:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | TYPE  |      POSX_L       |   POSX_R    |      POSY_L       |Y|  
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  POSY_R     | DIR |S|   SPEED_R   | MODE|  X  |      NUM      |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                NUM (cont.)                    |                
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0110.
+
+    - POSX_L: 10 bit unsigned integer in big-endian byte order,
+              representing the value of POSX to the left of the decimal point. 
+    - POSX_R: 7 bit unsigned integer in big-endian byte order,
+              representing the value of POSX to the right of the decimal point. 
+
+    - POSY_L: 10 bit unsigned integer in big-endian byte order,
+              representing the value of POSY to the left of the decimal point.
+    - POSY_R: 7 bit unsigned integer in big-endian byte order,
+              representing the value of POSY to the right of the decimal point. 
+
+    - DIR: 3 bit unsigned integer in big-endian byte order.
+
+    - S: 1 bit unsigned integer in big-endian byte order,
+         representing the value of SPEED to the left of the decimal point.
+    - SPEED_R: 7 bit unsigned integer in big-endian byte order,
+               representing the value of SPEED to the right of the decimal point. 
+
+    - MODE: 3 bit unsigned integer in big-endian byte order.
+
+    - Y: 1 bit, not used. MUST be set to zero in this version of the protocol.
+    - X: 3 bits, not used. MUST be set to zero in this version of the protocol.
+    
+    - NUM: 32 bit unsigned integer in big-endian byte order.
+
+   
+GHOST_EATEN
+===========
+Runs over TCP.
+
+This message is sent when our local computer detects our AWAY pacman has eaten
+a REMOTE ghost, in order to update the remote system.
+
+CONTENTS
+--------
+  - TYPE: GHOST_EATEN
+  - GN: The number of ghost in the range [0,3].
+
+FORMAT
+------
+  GHOST_EATEN messages consist of one byte, encoded as follows:
+
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  | GN| X |             
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 0111.
+    - GN: 2 bit unsigned integer in big-endian byte order.
+    - X: 2 bits, not used. MUST be set to zero in this version of the protocol.
+
+EAT_UPDATE
+==========
+Runs over TCP.
+
+This message is sent when our AWAY pacman eats food or powerpills on the remote screen.
+
+CONTENTS
+--------
+  - TYPE: EAT_UPDATE
+  - POSX: The column index of the food in the maze matrix.
+          An integer in the range [1,26].
+  - POSY: The row index of the food in the maze matrix.
+          An integer in the range [1,29].
+  - F: 0/1 if a foreign pacman ate food on our screen.
+  - P: 0/1 if food was eaten on the remote screen.   
+
+FORMAT
+------
+  EAT_UPDATE messages consist of two bytes, encoded as follows:
+
+    0                   1  
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5  
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | TYPE  |  POSX   |   POSY  |F|P|
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 1000.
+    - POSX: 5 bit unsigned integer in big-endian byte order.
+    - POSY: 5 bit unsigned integer in big-endian byte order.
+    - F: 1 bit unsigned integer in big-endian byte order.
+    - P: 1 bit unsigned integer in big-endian byte order.
+    - X: 6 bits, not used. MUST be set to zero in this version of the protocol.
+
+
+SCORE_UPDATE
+============
+Runs over UDP.
+
+This message is sent continuously, whether our pacman is LOCAL or AWAY.
+
+CONTENTS
+--------
+  - TYPE: SCORE_UPDATE
+  - SCORE: The current score.
+  - NUM: Integer that is incremented by one for every new message sent.
+         If it reaches (2^31)-1, it wraps back round to zero.
+
+FORMAT
+------
+  SCORE_UPDATE messages consist of eight bytes, encoded as follows:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | TYPE  |                       SCORE                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                               NUM                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 1001.
+    - SCORE: 28 bit unsigned integer in big-endian byte order.
+    - NUM: 32 bit unsigned integer in big-endian byte order.
+
+
+STATUS_UPDATE
+=============
+Runs over TCP.
+
+The local game board has states associated with it: 
+STARTUP, CHASE, FRIGHTEN, GAME_OVER, NEXT_LEVEL_WAIT, READY_TO_RESTART.
+Changes between these states are communicated using STATUS_UPDATE messages.
+
+Gameplay only happens in CHASE and FRIGHTEN state 
+(the difference being whether a powerpill has recently been eaten). 
+
+The software is in STARTUP state while playing the startup jingle. 
+If either player loses their last life, the game ends. 
+The losing player’s computer goes to GAME_OVER state, and sends a STATUS_UPDATE message. 
+The other side then also moves to GAME_OVER state. 
+From GAME_OVER state, if the local player presses “r” to restart, 
+the local computer goes to READY_TO_RESTART state and sends an update message. 
+The game restarts when the second player also presses “r”, 
+and sends a replying “READY_TO_RESTART” status update.
+
+When a level is cleared on a screen, that screen’s system goes to NEXT_LEVEL_WAIT 
+while it plays the jingle and the player gets ready. 
+Completing a level does not affect the level being played on the other screen, 
+except the pacman positions are reset.
+
+
+CONTENTS
+--------
+  - TYPE: STATUS_UPDATE
+  - STS: The status of the game.
+	 An integer in the range [0,6],
+         where 0 - STARTUP, 1 - CHASE, 2 - FRIGHTEN, 3 - DYING, 4 - GAME_OVER, 
+         5 - NEXT_LEVEL_WAIT, 6 - READY_TO_RESTART.
+
+
+FORMAT
+------
+  STATUS_UPDATE messages consist of one byte, encoded as follows:
+
+    0                           
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   | TYPE  | STS |X|             
+   +-+-+-+-+-+-+-+-+
+
+  Fields:
+    - TYPE: 4 bit type field. Type has decimal value 1010.
+    - STS: 3 bit unsigned integer in big-endian byte order.
+    - X: 1 bits, not used. MUST be set to zero in this version of the protocol.
+
+
+
+Sequence Numbers
+----------------
+
+Due to the use of UDP, messages may be lost or arrive out of order.
+We do not want to update the screen with out of order data.  The
+receiver therefore keeps track of the sequence number (NUM) of the last
+message received of each type.  If it receives a message of a specific
+type with a lower NUM than the last one received, the message MUST be discarded.  
+When performing this comparison, care must be taken to account for the potential 
+for NUM to wrap.
+
